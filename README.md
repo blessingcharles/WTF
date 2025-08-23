@@ -26,7 +26,8 @@ scanners should be able to analyze the response
 
 ### Web Cache Deception
 
-
+1. Random Suffix Detection
+![Random Suffix Images](https://github.com/blessingcharles/WTF/blob/main/docs/images/Wcd_Random_Suffix.png)
 
 ---
 ### References
