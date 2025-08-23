@@ -1,5 +1,7 @@
 # WTF - Where's The Flaw
 
+Simple automated burp extension to scan for various vulnerabilities in community edition. 
+
 ## Objective
 Develop a burp plugin while solving each labs, which would be able to scan request and give potential issue, similar to the thing available in the paid version.
 
