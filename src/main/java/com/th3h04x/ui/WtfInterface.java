@@ -34,7 +34,11 @@ public class WtfInterface {
 
     // Top panel: table with issues summary
     topOverViewPanel =
-        new TopOverViewPanel(api, reqRespPanel.getRequestArea(), reqRespPanel.getResponseArea());
+        new TopOverViewPanel(
+            api,
+            reqRespPanel.getRequestArea(),
+            reqRespPanel.getModifiedRequestArea(),
+            reqRespPanel.getResponseArea());
 
     // Main split: table on top, bottomSplit at the bottom
     JSplitPane mainSplit =

@@ -9,10 +9,12 @@ import javax.swing.*;
 public class ReqRespPanel implements WtfPanel {
 
   @Getter private final JTextArea requestArea;
+  @Getter private final JTextArea modifiedRequestArea;
   @Getter private final JTextArea responseArea;
 
   public ReqRespPanel() {
     this.requestArea = new JTextArea();
+    this.modifiedRequestArea = new JTextArea();
     this.responseArea = new JTextArea();
   }
 
@@ -22,16 +24,25 @@ public class ReqRespPanel implements WtfPanel {
     requestScroll.setBorder(
         BorderFactory.createTitledBorder(String.valueOf(ColumnName.EXPANDED_REQUEST)));
 
+    modifiedRequestArea.setEditable(false);
+    JScrollPane modifiedRequestScroll = new JScrollPane(modifiedRequestArea);
+    modifiedRequestScroll.setBorder(
+        BorderFactory.createTitledBorder(String.valueOf(ColumnName.EXPANDED_MODIFIED_REQUEST)));
+
     responseArea.setEditable(false);
     JScrollPane responseScroll = new JScrollPane(responseArea);
     responseScroll.setBorder(
         BorderFactory.createTitledBorder(String.valueOf(ColumnName.EXPANDED_RESPONSE)));
 
-    JSplitPane bottomSplit =
-        new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, requestScroll, responseScroll);
+    // First split: request | modified request
+    JSplitPane leftSplit =
+        new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, requestScroll, modifiedRequestScroll);
+    leftSplit.setResizeWeight(0.5); // split equally
 
-    // Split equally in the middle
-    bottomSplit.setResizeWeight(0.5);
+    // Now split leftSplit with response => (request | modified) | response
+    JSplitPane bottomSplit =
+        new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftSplit, responseScroll);
+    bottomSplit.setResizeWeight(0.66); // so it divides ~1/3,1/3,1/3
 
     return bottomSplit;
   }

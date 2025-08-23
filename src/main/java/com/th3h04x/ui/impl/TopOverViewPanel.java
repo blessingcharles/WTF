@@ -13,13 +13,15 @@ public class TopOverViewPanel implements WtfPanel {
 
   private final MontoyaApi api;
   private final JTextArea requestArea;
+  private final JTextArea modifiedRequestArea;
   private final JTextArea responseArea;
   private DefaultTableModel tableModel;
   private JTable table;
 
-  public TopOverViewPanel(MontoyaApi api, JTextArea requestArea, JTextArea responseArea) {
+  public TopOverViewPanel(MontoyaApi api, JTextArea requestArea, JTextArea modifiedRequestArea, JTextArea responseArea) {
     this.api = api;
     this.requestArea = requestArea;
+    this.modifiedRequestArea = modifiedRequestArea;
     this.responseArea = responseArea;
   }
 
@@ -34,6 +36,7 @@ public class TopOverViewPanel implements WtfPanel {
             0);
 
     table = new JTable(tableModel);
+    table.setRowHeight(50);
 
     // Adjust column widths
     table.getColumnModel().getColumn(0).setPreferredWidth(50); // S.NO
@@ -76,7 +79,8 @@ public class TopOverViewPanel implements WtfPanel {
               if (row >= 0) {
                 WtfResult wtfResult = WtfResultStore.getInstance().getResult(row);
                 if (wtfResult != null) {
-                  requestArea.setText(wtfResult.getModifiedRequest().toString());
+                  requestArea.setText(wtfResult.getRequest().toString());
+                  modifiedRequestArea.setText(wtfResult.getModifiedRequest().toString());
                   responseArea.setText(wtfResult.getResponse().toString());
                 }
               }

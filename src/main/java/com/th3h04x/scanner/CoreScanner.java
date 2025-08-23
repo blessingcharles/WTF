@@ -13,10 +13,10 @@ public class CoreScanner {
     try {
       // TODO: find a way to dynamically load the inbuilt scanners.
 
-      List<WtfScanner> wtfScanners = List.of(new WebCacheDeception());
+      List<WtfScanner> wtfScanners = List.of(new WebCacheDeception(api));
 
       for (WtfScanner scanner : wtfScanners) {
-        scanner.scan(request, api);
+        scanner.scan(request);
       }
 
     } catch (Exception e) {

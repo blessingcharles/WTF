@@ -10,6 +10,7 @@ public enum ColumnName {
 
     // bottom panel
     EXPANDED_REQUEST("Request"),
+    EXPANDED_MODIFIED_REQUEST("Modified Request"),
     EXPANDED_RESPONSE("Response");
 
     private final String name ;
