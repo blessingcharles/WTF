@@ -8,6 +8,10 @@ import java.util.random.RandomGenerator;
 public class CommonUtil {
 
   public static int countSlashes(String s) {
+    if(s.charAt(s.length()-1) == '/'){
+      s = s.substring(0, s.length()-1);
+    }
+
     return countOccurences(s, '/');
   }
 

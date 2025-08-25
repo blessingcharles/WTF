@@ -20,7 +20,7 @@ public class WcdPayload {
   //https://portswigger.net/web-security/web-cache-deception/wcd-lab-delimiter-list
   public static final List<String> DELIMITER_DISCREPANCIES =
       List.of(
-          "#",
+          ";",
           "\"",
           "!",
           "$",
@@ -36,7 +36,7 @@ public class WcdPayload {
           ".",
           "/",
           ":",
-          ";",
+          "#",
           "<",
           "=",
           ">",

@@ -20,4 +20,9 @@ public class CommonPayload {
       Set.of("/static/", "/assets/", "/public/", "/resources/",
           "/media/", "/content/", "/css/", "/js/", "/scripts/",
           "/images/", "/img/", "/fonts/", "/icons/", "/vendor/");
+
+  public static final Set<String> COMMON_CACHEABLE_FILES =
+      Set.of("robots.txt", "index", "index.html", "sitemap.xml", "favicon.ico");
+
+  public static final Set<String> VARIOUS_SLASHES = Set.of("/", "%2f", "%252f");
 }

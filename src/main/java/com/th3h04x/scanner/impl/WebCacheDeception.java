@@ -32,7 +32,7 @@ public class WebCacheDeception implements WtfScanner {
   @Override
   public void scan(HttpRequest request, HttpResponse realHttpResponse) {
 
-    this.realHttpResponse = realHttpResponse ;
+    this.realHttpResponse = realHttpResponse;
 
     try {
       if (!realHttpResponse.isStatusCodeClass(StatusCodeClass.CLASS_2XX_SUCCESS)) {
@@ -41,7 +41,7 @@ public class WebCacheDeception implements WtfScanner {
 
       // scan only for non cacheable request with 2xx responses
       if (!HttpUtil.isCacheableStaticResource(request.url())) {
-
+        commonCacheableFiles(request);
         addRandomSuffix(request);
         delimiterDiscrepancy(request);
         addRandomExtension(request);
@@ -75,8 +75,7 @@ public class WebCacheDeception implements WtfScanner {
       String modifiedPath = currPath + suffix;
       HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
-      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "random " +
-          "suffix");
+      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "random " + "suffix");
     }
   }
 
@@ -86,11 +85,15 @@ public class WebCacheDeception implements WtfScanner {
    */
   private void delimiterDiscrepancy(HttpRequest request) {
     for (String suffix : WcdPayload.DELIMITER_DISCREPANCIES) {
-      String modifiedPath = request.pathWithoutQuery() + suffix + "f.js";
+      String modifiedPath =
+          request.pathWithoutQuery()
+              + suffix
+              + "robots"
+              + ".txt?"
+              + CommonUtil.generateRandomStr(5);
       HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
-      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "delimeter " +
-          "discrepancy");
+      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "delimeter " + "discrepancy");
     }
   }
 
@@ -104,8 +107,7 @@ public class WebCacheDeception implements WtfScanner {
       String modifiedPath = request.pathWithoutQuery() + suffix;
       HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
-      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "random " +
-          "extension");
+      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "random " + "extension");
     }
   }
 
@@ -114,8 +116,7 @@ public class WebCacheDeception implements WtfScanner {
       String modifiedPath = request.pathWithoutQuery() + suffix + "f";
       HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
-      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "non " +
-          "printable character");
+      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "non " + "printable character");
     }
   }
 
@@ -139,14 +140,13 @@ public class WebCacheDeception implements WtfScanner {
         String payload = WtfUtil.buildTraversalPayload(path, encodedDotDotSlash);
         String modifiedPath = WtfUtil.insertBeforeLast(request.pathWithoutQuery(), payload);
         HttpRequest modifiedRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
-        sendAndAnalyzeResponse(request, modifiedRequest, true, "path " +
-            "normalization origin server");
+        sendAndAnalyzeResponse(
+            request, modifiedRequest, true, "path " + "normalization origin server");
       }
     }
   }
 
-  private void pathNormalizationOriginServerCacheablePath(HttpRequest request,
-                                                          String staticDir) {
+  private void pathNormalizationOriginServerCacheablePath(HttpRequest request, String staticDir) {
     // when a new static path comes fuzz it with all non cacheable path
     String currentPath = request.pathWithoutQuery();
 
@@ -157,8 +157,7 @@ public class WebCacheDeception implements WtfScanner {
 
         String modifiedPath = WtfUtil.insertBeforeLast(path, payload);
         HttpRequest modifiedRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
-        sendAndAnalyzeResponse(request, modifiedRequest, true, "path " +
-            "normalization");
+        sendAndAnalyzeResponse(request, modifiedRequest, true, "path " + "normalization");
       }
     }
   }
@@ -175,30 +174,32 @@ public class WebCacheDeception implements WtfScanner {
   private void pathNormalizationCacheServerNonCacheable(HttpRequest request) {
     // when non cacheable path comes
     String currPathWithoutQuery = request.pathWithoutQuery();
-    if(currPathWithoutQuery.isBlank() || Objects.equals(currPathWithoutQuery, "/")){
+    if (currPathWithoutQuery.isBlank() || Objects.equals(currPathWithoutQuery, "/")) {
       return;
     }
 
-    for(String cacheablePath: InMemory.CACHEABLE_PATH){
-      for (String delimiters: WcdPayload.DELIMITER_DISCREPANCIES) {
-        for (String dotDotSlash: WcdPayload.PATH_NORMALIZATION) {
-          String withDelimeters = currPathWithoutQuery + delimiters ;
-          String traversalPayload =
-              WtfUtil.buildTraversalPayload(withDelimeters,
-              dotDotSlash);
+    for (String cacheablePath : InMemory.CACHEABLE_PATH) {
+      for (String delimiters : WcdPayload.DELIMITER_DISCREPANCIES) {
+        for (String dotDotSlash : WcdPayload.PATH_NORMALIZATION) {
+          String withDelimeters = currPathWithoutQuery + delimiters;
+          String traversalPayload = WtfUtil.buildTraversalPayload(withDelimeters, dotDotSlash);
 
-          String cacheBustingQuery =  CommonUtil.generateRandomStr(4) + "=1";
+          String cacheBustingQuery = CommonUtil.generateRandomStr(4) + "=1";
 
-          if(!request.query().isBlank()){
-            cacheBustingQuery = "&" + cacheBustingQuery ;
+          if (!request.query().isBlank()) {
+            cacheBustingQuery = "&" + cacheBustingQuery;
           }
           String modifiedPath =
-              traversalPayload + cacheablePath.substring(1) + "?" + request.query() + cacheBustingQuery;
+              traversalPayload
+                  + cacheablePath.substring(1)
+                  + "?"
+                  + request.query()
+                  + cacheBustingQuery;
 
           HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
-          sendAndAnalyzeResponse(request, modifiedHttpRequest, true,
-              "path normalization cache server");
+          sendAndAnalyzeResponse(
+              request, modifiedHttpRequest, true, "path normalization cache server");
         }
       }
     }
@@ -207,42 +208,73 @@ public class WebCacheDeception implements WtfScanner {
   private void pathNormalizationCacheServerCacheable(HttpRequest request) {
     // when cacheable path comes
     String currPathWithoutQuery = request.pathWithoutQuery();
-    if(currPathWithoutQuery.isBlank() || Objects.equals(currPathWithoutQuery,
-        "/")){
+    if (currPathWithoutQuery.isBlank() || Objects.equals(currPathWithoutQuery, "/")) {
       return;
     }
 
-    for(String nonCacheablePath: InMemory.NON_CACHEABLE_PATH){
-      for (String delimiters: WcdPayload.DELIMITER_DISCREPANCIES) {
-        for (String dotDotSlash: WcdPayload.PATH_NORMALIZATION) {
-          String withDelimeters = nonCacheablePath + delimiters ;
-          String traversalPayload =
-              WtfUtil.buildTraversalPayload(withDelimeters,
-                  dotDotSlash);
+    for (String nonCacheablePath : InMemory.NON_CACHEABLE_PATH) {
+      for (String delimiters : WcdPayload.DELIMITER_DISCREPANCIES) {
+        for (String dotDotSlash : WcdPayload.PATH_NORMALIZATION) {
+          String withDelimeters = nonCacheablePath + delimiters;
+          String traversalPayload = WtfUtil.buildTraversalPayload(withDelimeters, dotDotSlash);
 
-          String cacheBustingQuery =  CommonUtil.generateRandomStr(4) + "=1";
+          String cacheBustingQuery = CommonUtil.generateRandomStr(4) + "=1";
 
-          if(!request.query().isBlank()){
-            cacheBustingQuery = "&" + cacheBustingQuery ;
+          if (!request.query().isBlank()) {
+            cacheBustingQuery = "&" + cacheBustingQuery;
           }
           String modifiedPath =
-              traversalPayload + currPathWithoutQuery.substring(1) + "?" + request.query() + cacheBustingQuery;
+              traversalPayload
+                  + currPathWithoutQuery.substring(1)
+                  + "?"
+                  + request.query()
+                  + cacheBustingQuery;
 
           HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
-          sendAndAnalyzeResponse(request, modifiedHttpRequest, true,
-              "path normalization cache server");
+          sendAndAnalyzeResponse(
+              request, modifiedHttpRequest, true, "path normalization cache server");
         }
       }
     }
   }
+
+  private void commonCacheableFiles(HttpRequest request) {
+    String currPathWithoutQuery = request.pathWithoutQuery();
+    if (currPathWithoutQuery.isBlank() || currPathWithoutQuery.equals("/")) {
+      return;
+    }
+
+    for (String delimiters : WcdPayload.DELIMITER_DISCREPANCIES) {
+      for (String dotDotSlash : WcdPayload.PATH_NORMALIZATION) {
+        for (String filenames : CommonPayload.COMMON_CACHEABLE_FILES) {
+          for (String slashes : CommonPayload.VARIOUS_SLASHES) {
+
+            String modifiedDotDotSlash =
+                dotDotSlash.repeat(CommonUtil.countSlashes(currPathWithoutQuery));
+            String modifiedPath =
+                currPathWithoutQuery + delimiters + slashes + modifiedDotDotSlash + filenames + "?" + CommonUtil.generateRandomStr(6);
+
+            HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
+
+            sendAndAnalyzeResponse(
+                request, modifiedHttpRequest, true, "common cacheable files parsing discrepancies");
+          }
+        }
+      }
+    }
+  }
+
   private void sendAndAnalyzeResponse(
-      HttpRequest request, HttpRequest modifiedRequest,
-      boolean checkForCacheableHeader, String issueDescription) {
+      HttpRequest request,
+      HttpRequest modifiedRequest,
+      boolean checkForCacheableHeader,
+      String issueDescription) {
     HttpResponse response = ScannerUtil.sendModifiedRequest(api, modifiedRequest);
 
     // TODO: fix false positives like gql behaviour and redirections ??
-    if (realHttpResponse.statusCode() == response.statusCode() && response.statusCode() < 300
+    if (realHttpResponse.statusCode() == response.statusCode()
+        && response.statusCode() < 300
         && (!checkForCacheableHeader || HttpUtil.containCacheableHeader(response))) {
 
       WtfResult wtfResult =
