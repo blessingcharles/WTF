@@ -10,6 +10,7 @@ import com.th3h04x.payload.CommonPayload;
 import com.th3h04x.payload.WcdPayload;
 import com.th3h04x.scanner.WtfScanner;
 import com.th3h04x.ui.WtfInterface;
+import com.th3h04x.util.CommonUtil;
 import com.th3h04x.util.HttpUtil;
 import com.th3h04x.util.ScannerUtil;
 import com.th3h04x.util.WtfUtil;
@@ -45,15 +46,16 @@ public class WebCacheDeception implements WtfScanner {
         delimiterDiscrepancy(request);
         addRandomExtension(request);
         nonPrintableCharacterDiscrepancies(request);
-        pathNormalizationCacheServer(request);
-        pathNormalizationOriginServerNonStaticPath(request);
+        pathNormalizationCacheServerNonCacheable(request);
+        pathNormalizationOriginServerNonCacheablePath(request);
       } else {
         String dir = HttpUtil.stripFilename(request.pathWithoutQuery());
         // don't do it for /index.html where there is no nested static directories
         // only valid for /assets/js/main.js
         if (!InMemory.STATIC_DIR.contains(dir) && !dir.isBlank() && !dir.equals("/")) {
           InMemory.STATIC_DIR.add(dir);
-          pathNormalizationOriginServerStaticPath(request, dir);
+          pathNormalizationOriginServerCacheablePath(request, dir);
+          pathNormalizationCacheServerCacheable(request);
         }
       }
 
@@ -84,7 +86,7 @@ public class WebCacheDeception implements WtfScanner {
    */
   private void delimiterDiscrepancy(HttpRequest request) {
     for (String suffix : WcdPayload.DELIMITER_DISCREPANCIES) {
-      String modifiedPath = request.pathWithoutQuery() + suffix;
+      String modifiedPath = request.pathWithoutQuery() + suffix + "f.js";
       HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
       sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "delimeter " +
@@ -128,7 +130,7 @@ public class WebCacheDeception implements WtfScanner {
    * folders, so we can cache victim's sensitive info inside the cache)
    * [*] Origin interpretation: /profile
    */
-  private void pathNormalizationOriginServerNonStaticPath(HttpRequest request) {
+  private void pathNormalizationOriginServerNonCacheablePath(HttpRequest request) {
     // when a non-static path comes, combine it with previously found static dir
 
     for (String path : InMemory.STATIC_DIR) {
@@ -143,7 +145,8 @@ public class WebCacheDeception implements WtfScanner {
     }
   }
 
-  private void pathNormalizationOriginServerStaticPath(HttpRequest request, String staticDir) {
+  private void pathNormalizationOriginServerCacheablePath(HttpRequest request,
+                                                          String staticDir) {
     // when a new static path comes fuzz it with all non cacheable path
     String currentPath = request.pathWithoutQuery();
 
@@ -160,15 +163,79 @@ public class WebCacheDeception implements WtfScanner {
     }
   }
 
-  private void pathNormalizationCacheServer(HttpRequest request) {
+  /*
+   * Check whether the cache server is normalizing the path before caching,
+   *  but not the origin server
+   * /path/profile;..%2f..%2f/static/js/test.js
+   *
+   * Cache: /static/js/test.js
+   * Origin Server: /path/profile (we also need a delimiter which is only
+   *        seen by the origin server)
+   */
+  private void pathNormalizationCacheServerNonCacheable(HttpRequest request) {
+    // when non cacheable path comes
+    String currPathWithoutQuery = request.pathWithoutQuery();
+    if(currPathWithoutQuery.isBlank() || Objects.equals(currPathWithoutQuery, "/")){
+      return;
+    }
 
-    /*
-     * Check whether the cache server is normalizing the path before caching,
-     *  but not the origin server
-     * /path/profile..%2f
-     */
+    for(String cacheablePath: InMemory.CACHEABLE_PATH){
+      for (String delimiters: WcdPayload.DELIMITER_DISCREPANCIES) {
+        for (String dotDotSlash: WcdPayload.PATH_NORMALIZATION) {
+          String withDelimeters = currPathWithoutQuery + delimiters ;
+          String traversalPayload =
+              WtfUtil.buildTraversalPayload(withDelimeters,
+              dotDotSlash);
+
+          String cacheBustingQuery =  CommonUtil.generateRandomStr(4) + "=1";
+
+          if(!request.query().isBlank()){
+            cacheBustingQuery = "&" + cacheBustingQuery ;
+          }
+          String modifiedPath =
+              traversalPayload + cacheablePath.substring(1) + "?" + request.query() + cacheBustingQuery;
+
+          HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
+
+          sendAndAnalyzeResponse(request, modifiedHttpRequest, true,
+              "path normalization cache server");
+        }
+      }
+    }
   }
 
+  private void pathNormalizationCacheServerCacheable(HttpRequest request) {
+    // when cacheable path comes
+    String currPathWithoutQuery = request.pathWithoutQuery();
+    if(currPathWithoutQuery.isBlank() || Objects.equals(currPathWithoutQuery,
+        "/")){
+      return;
+    }
+
+    for(String nonCacheablePath: InMemory.NON_CACHEABLE_PATH){
+      for (String delimiters: WcdPayload.DELIMITER_DISCREPANCIES) {
+        for (String dotDotSlash: WcdPayload.PATH_NORMALIZATION) {
+          String withDelimeters = nonCacheablePath + delimiters ;
+          String traversalPayload =
+              WtfUtil.buildTraversalPayload(withDelimeters,
+                  dotDotSlash);
+
+          String cacheBustingQuery =  CommonUtil.generateRandomStr(4) + "=1";
+
+          if(!request.query().isBlank()){
+            cacheBustingQuery = "&" + cacheBustingQuery ;
+          }
+          String modifiedPath =
+              traversalPayload + currPathWithoutQuery.substring(1) + "?" + request.query() + cacheBustingQuery;
+
+          HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
+
+          sendAndAnalyzeResponse(request, modifiedHttpRequest, true,
+              "path normalization cache server");
+        }
+      }
+    }
+  }
   private void sendAndAnalyzeResponse(
       HttpRequest request, HttpRequest modifiedRequest,
       boolean checkForCacheableHeader, String issueDescription) {
