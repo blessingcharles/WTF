@@ -23,6 +23,11 @@ public class WtfResultStore {
         results.add(result);
     }
 
+    // remove an item
+    public void removeItem(int index){
+        results.remove(index);
+    }
+
     // Get all results (read-only copy)
     public List<WtfResult> getResults() {
         synchronized (results) {

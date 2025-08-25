@@ -3,16 +3,14 @@ package com.th3h04x.handler;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.handler.*;
 import com.th3h04x.constant.CoreConstant;
+import com.th3h04x.db.InMemory;
 import com.th3h04x.scanner.CoreScanner;
+import com.th3h04x.util.WtfUtil;
 import org.apache.commons.codec.digest.DigestUtils;
-
-import java.util.HashSet;
-import java.util.Set;
 
 public class WtfHttpHandler implements HttpHandler {
 
   private final CoreScanner coreScanner;
-  private final Set<String> seenRequests = new HashSet<>();
 
   private MontoyaApi api;
 
@@ -28,7 +26,8 @@ public class WtfHttpHandler implements HttpHandler {
   public RequestToBeSentAction handleHttpRequestToBeSent(HttpRequestToBeSent requestToBeSent) {
 
     if (isScannable(requestToBeSent)) {
-      seenRequests.add(requestKeyGen(requestToBeSent));
+      InMemory.SEEN_REQUESTS.add(requestKeyGen(requestToBeSent));
+
       new Thread(() -> coreScanner.scan(requestToBeSent, api)).start();
     }
 
@@ -43,8 +42,9 @@ public class WtfHttpHandler implements HttpHandler {
 
   private boolean isScannable(HttpRequestToBeSent requestToBeSent) {
     String key = requestKeyGen(requestToBeSent);
+    String host = requestToBeSent.httpService().host();
 
-    return !seenRequests.contains(key)
+    return WtfUtil.isInScope(host) && !InMemory.SEEN_REQUESTS.contains(key)
         && !requestToBeSent.hasHeader(CoreConstant.WTF_MARKER_HEADER_KEY);
   }
 
@@ -52,7 +52,7 @@ public class WtfHttpHandler implements HttpHandler {
 
     String key = requestToBeSent.method() + "::" + requestToBeSent.url();
     if (!requestToBeSent.bodyToString().isEmpty()) {
-      key = key + "::" + DigestUtils.md5Hex(requestToBeSent.bodyToString());
+      key = key + "::" + DigestUtils.md5Hex(requestToBeSent.toString());
     }
     return key;
   }

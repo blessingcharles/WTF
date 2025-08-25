@@ -1,21 +1,27 @@
 package com.th3h04x.scanner.impl;
 
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.http.message.StatusCodeClass;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.http.message.responses.HttpResponse;
+import com.th3h04x.db.InMemory;
 import com.th3h04x.model.WtfResult;
+import com.th3h04x.payload.CommonPayload;
+import com.th3h04x.payload.WcdPayload;
 import com.th3h04x.scanner.WtfScanner;
 import com.th3h04x.ui.WtfInterface;
 import com.th3h04x.util.HttpUtil;
 import com.th3h04x.util.ScannerUtil;
+import com.th3h04x.util.WtfUtil;
 
 import javax.swing.*;
-import java.util.List;
+import java.util.Objects;
 
+// https://portswigger.net/web-security/web-cache-deception
 public class WebCacheDeception implements WtfScanner {
 
   private final MontoyaApi api;
-  private final List<String> randomSuffix = List.of("b", "b/");
+
   private HttpResponse realHttpResponse;
 
   public WebCacheDeception(MontoyaApi api) {
@@ -23,28 +29,36 @@ public class WebCacheDeception implements WtfScanner {
   }
 
   @Override
-  public void scan(HttpRequest request) {
+  public void scan(HttpRequest request, HttpResponse realHttpResponse) {
 
-    realHttpResponse = api.http().sendRequest(request).response();
-    if (realHttpResponse.statusCode() < 400) {
-      addRandomSuffix(request);
-    }
-  }
+    this.realHttpResponse = realHttpResponse ;
 
-  private void analyzeResponse(
-      HttpRequest request, HttpRequest modifiedRequest, HttpResponse response) {
-    // TODO: fix false positives like gql behaviour and redirections ??
-    if (realHttpResponse.statusCode() == response.statusCode() && response.statusCode() < 400) {
+    try {
+      if (!realHttpResponse.isStatusCodeClass(StatusCodeClass.CLASS_2XX_SUCCESS)) {
+        return;
+      }
 
-      WtfResult wtfResult =
-          WtfResult.builder()
-              .modifiedRequest(modifiedRequest)
-              .request(request)
-              .response(response)
-              .issueDescription("modified request has the same status as the " + "original")
-              .scannerName("wcd")
-              .build();
-      SwingUtilities.invokeLater(() -> WtfInterface.getInstance().addScanResult(wtfResult));
+      // scan only for non cacheable request with 2xx responses
+      if (!HttpUtil.isCacheableStaticResource(request.url())) {
+
+        addRandomSuffix(request);
+        delimiterDiscrepancy(request);
+        addRandomExtension(request);
+        nonPrintableCharacterDiscrepancies(request);
+        pathNormalizationCacheServer(request);
+        pathNormalizationOriginServerNonStaticPath(request);
+      } else {
+        String dir = HttpUtil.stripFilename(request.pathWithoutQuery());
+        // don't do it for /index.html where there is no nested static directories
+        // only valid for /assets/js/main.js
+        if (!InMemory.STATIC_DIR.contains(dir) && !dir.isBlank() && !dir.equals("/")) {
+          InMemory.STATIC_DIR.add(dir);
+          pathNormalizationOriginServerStaticPath(request, dir);
+        }
+      }
+
+    } catch (Exception e) {
+      api.logging().logToError("Exception happened in wcd scanner, exception: " + e);
     }
   }
 
@@ -54,15 +68,125 @@ public class WebCacheDeception implements WtfScanner {
    */
   private void addRandomSuffix(HttpRequest request) {
 
-    for (String suffix : randomSuffix) {
+    for (String suffix : WcdPayload.RANDOM_PATH_SUFFIX) {
+      String currPath = WtfUtil.trimTrailingSlash(request.pathWithoutQuery());
+      String modifiedPath = currPath + suffix;
+      HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
-      String currPath = request.pathWithoutQuery();
-      String modifiedPath = currPath + (currPath.endsWith("/") ? "" : "/") + suffix;
-      HttpRequest modifiedHttpRequest = request.withPath(modifiedPath);
+      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "random " +
+          "suffix");
+    }
+  }
 
-      HttpResponse httpResponse = ScannerUtil.sendModifiedRequest(api, modifiedHttpRequest);
+  /**
+   * Add a random delimiter suffix /account;foo.js check whether the cache and origin servers
+   * disagrees on the parsing behaviour.
+   */
+  private void delimiterDiscrepancy(HttpRequest request) {
+    for (String suffix : WcdPayload.DELIMITER_DISCREPANCIES) {
+      String modifiedPath = request.pathWithoutQuery() + suffix;
+      HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
 
-      analyzeResponse(request, modifiedHttpRequest, httpResponse);
+      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "delimeter " +
+          "discrepancy");
+    }
+  }
+
+  private void addRandomExtension(HttpRequest request) {
+    for (String suffix : WcdPayload.CACHEABLE_EXTENSIONS) {
+      if (Objects.equals(request.pathWithoutQuery(), "")
+          || Objects.equals(request.pathWithoutQuery(), "/")) {
+        continue;
+      }
+
+      String modifiedPath = request.pathWithoutQuery() + suffix;
+      HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
+
+      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "random " +
+          "extension");
+    }
+  }
+
+  private void nonPrintableCharacterDiscrepancies(HttpRequest request) {
+    for (String suffix : CommonPayload.NON_PRINTABLE_URL_ENCODED) {
+      String modifiedPath = request.pathWithoutQuery() + suffix + "f";
+      HttpRequest modifiedHttpRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
+
+      sendAndAnalyzeResponse(request, modifiedHttpRequest, false, "non " +
+          "printable character");
+    }
+  }
+
+  /*
+   * [Path Normalization]
+   * Check whether the origin server is normalizing the path, but not the
+   * cache server eg: /assets/..%2fprofile
+   *
+   * Condition to satisfy
+   * [*] Cache interpretation: /assets/..%2fprofile
+   * (Cache may be configured to cache anything nested inside these static
+   * folders, so we can cache victim's sensitive info inside the cache)
+   * [*] Origin interpretation: /profile
+   */
+  private void pathNormalizationOriginServerNonStaticPath(HttpRequest request) {
+    // when a non-static path comes, combine it with previously found static dir
+
+    for (String path : InMemory.STATIC_DIR) {
+      for (String encodedDotDotSlash : WcdPayload.PATH_NORMALIZATION) {
+
+        String payload = WtfUtil.buildTraversalPayload(path, encodedDotDotSlash);
+        String modifiedPath = WtfUtil.insertBeforeLast(request.pathWithoutQuery(), payload);
+        HttpRequest modifiedRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
+        sendAndAnalyzeResponse(request, modifiedRequest, true, "path " +
+            "normalization origin server");
+      }
+    }
+  }
+
+  private void pathNormalizationOriginServerStaticPath(HttpRequest request, String staticDir) {
+    // when a new static path comes fuzz it with all non cacheable path
+    String currentPath = request.pathWithoutQuery();
+
+    for (String path : InMemory.NON_CACHEABLE_PATH) {
+      for (String encodedDotDotSlash : WcdPayload.PATH_NORMALIZATION) {
+
+        String payload = WtfUtil.buildTraversalPayload(staticDir, encodedDotDotSlash);
+
+        String modifiedPath = WtfUtil.insertBeforeLast(path, payload);
+        HttpRequest modifiedRequest = WtfUtil.buildModifiedPath(request, modifiedPath);
+        sendAndAnalyzeResponse(request, modifiedRequest, true, "path " +
+            "normalization");
+      }
+    }
+  }
+
+  private void pathNormalizationCacheServer(HttpRequest request) {
+
+    /*
+     * Check whether the cache server is normalizing the path before caching,
+     *  but not the origin server
+     * /path/profile..%2f
+     */
+  }
+
+  private void sendAndAnalyzeResponse(
+      HttpRequest request, HttpRequest modifiedRequest,
+      boolean checkForCacheableHeader, String issueDescription) {
+    HttpResponse response = ScannerUtil.sendModifiedRequest(api, modifiedRequest);
+
+    // TODO: fix false positives like gql behaviour and redirections ??
+    if (realHttpResponse.statusCode() == response.statusCode() && response.statusCode() < 300
+        && (!checkForCacheableHeader || HttpUtil.containCacheableHeader(response))) {
+
+      WtfResult wtfResult =
+          WtfResult.builder()
+              .modifiedRequest(modifiedRequest)
+              .request(request)
+              .response(response)
+              .issueDescription(issueDescription)
+              .scannerName("web cache deception")
+              .build();
+      SwingUtilities.invokeLater(() -> WtfInterface.getInstance().addScanResult(wtfResult));
     }
   }
 }

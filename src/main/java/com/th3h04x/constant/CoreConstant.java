@@ -1,8 +1,9 @@
 package com.th3h04x.constant;
 
+import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class CoreConstant {
     public static final String WTF = "WTF" ;
     public static final String EXTENSION_NAME = "Where's The Flaw" ;

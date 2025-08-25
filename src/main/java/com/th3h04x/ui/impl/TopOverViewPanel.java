@@ -2,12 +2,19 @@ package com.th3h04x.ui.impl;
 
 import burp.api.montoya.MontoyaApi;
 import com.th3h04x.constant.ColumnName;
+import com.th3h04x.db.InMemory;
 import com.th3h04x.model.WtfResult;
 import com.th3h04x.store.WtfResultStore;
 import com.th3h04x.ui.WtfPanel;
+import com.th3h04x.util.WtfUtil;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableModel;
+import javax.swing.table.TableRowSorter;
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Pattern;
 
 public class TopOverViewPanel implements WtfPanel {
 
@@ -18,7 +25,11 @@ public class TopOverViewPanel implements WtfPanel {
   private DefaultTableModel tableModel;
   private JTable table;
 
-  public TopOverViewPanel(MontoyaApi api, JTextArea requestArea, JTextArea modifiedRequestArea, JTextArea responseArea) {
+  public TopOverViewPanel(
+      MontoyaApi api,
+      JTextArea requestArea,
+      JTextArea modifiedRequestArea,
+      JTextArea responseArea) {
     this.api = api;
     this.requestArea = requestArea;
     this.modifiedRequestArea = modifiedRequestArea;
@@ -37,6 +48,9 @@ public class TopOverViewPanel implements WtfPanel {
 
     table = new JTable(tableModel);
     table.setRowHeight(50);
+
+    TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tableModel);
+    table.setRowSorter(sorter);
 
     // Adjust column widths
     table.getColumnModel().getColumn(0).setPreferredWidth(50); // S.NO
@@ -65,7 +79,7 @@ public class TopOverViewPanel implements WtfPanel {
   private void paintTheUi() {
 
     // set up the extension options
-    table.setComponentPopupMenu(prepareContextMenu());
+    table.setComponentPopupMenu(ContextMenuOption.prepareContextMenu(table, api));
     addClickListeners();
   }
 
@@ -87,38 +101,34 @@ public class TopOverViewPanel implements WtfPanel {
             });
   }
 
-  private JPopupMenu prepareContextMenu() {
-    // Inside your WtfTabPanel constructor or initializer
-    JPopupMenu contextMenu = new JPopupMenu();
+  // applying filter for the given scope
+  public void applyFilter(String domains) {
+    WtfResultStore wtfResultStore = WtfResultStore.getInstance();
+    InMemory.IN_SCOPE.clear();
 
-    JMenuItem sendToRepeater = new JMenuItem("Send to Repeater");
-    sendToRepeater.addActionListener(
-        e -> {
-          int row = table.getSelectedRow();
-          if (row >= 0) {
-            WtfResult result = WtfResultStore.getInstance().getResult(row);
-            if (result != null) {
-              // Send request to Repeater using Montoya API
-              api.repeater().sendToRepeater(result.getModifiedRequest());
-            }
-          }
-        });
+    List<String> filters = Arrays.stream(domains.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .toList();
 
-    JMenuItem sendToIntruder = new JMenuItem("Send to Intruder");
-    sendToIntruder.addActionListener(
-        e -> {
-          int row = table.getSelectedRow();
-          if (row >= 0) {
-            WtfResult result = WtfResultStore.getInstance().getResult(row);
-            if (result != null) {
-              api.intruder().sendToIntruder(result.getModifiedRequest());
-            }
-          }
-        });
+    InMemory.IN_SCOPE.addAll(filters);
 
-    contextMenu.add(sendToRepeater);
-    contextMenu.add(sendToIntruder);
+    TableRowSorter<?> sorter = (TableRowSorter<?>) table.getRowSorter();
+    if (filters.isEmpty()) {
+      sorter.setRowFilter(null); // show all
+    } else {
+      sorter.setRowFilter(new RowFilter<TableModel, Integer>() {
 
-    return contextMenu;
+        @Override
+        public boolean include(Entry entry) {
+          int modelRow = (int) entry.getIdentifier();
+          WtfResult wtfResult = wtfResultStore.getResult(modelRow);
+          if (wtfResult == null) return false;
+
+          String host = wtfResult.getRequest().httpService().host();
+          return WtfUtil.isInScope(host); // keep only in-scope rows
+        }
+      });
+    }
   }
 }

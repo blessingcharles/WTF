@@ -3,6 +3,7 @@ package com.th3h04x;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import com.th3h04x.constant.CoreConstant;
+import com.th3h04x.db.InMemory;
 import com.th3h04x.handler.WtfHttpHandler;
 import com.th3h04x.ui.WtfInterface;
 
@@ -31,5 +32,8 @@ public class Wtf implements BurpExtension {
     montoyaApi.userInterface().registerSuiteTab(CoreConstant.WTF, wtfInterface.paint().getPanel());
 
     montoyaApi.logging().logToOutput("WTF extension loaded successfully");
+
+    // debugging stuffs, remove before release
+    InMemory.IN_SCOPE.add("*.web-security-academy.net");
   }
 }
