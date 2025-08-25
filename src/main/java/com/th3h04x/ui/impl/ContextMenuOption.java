@@ -6,10 +6,16 @@ import com.th3h04x.model.WtfResult;
 import com.th3h04x.store.WtfResultStore;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
 
 public class ContextMenuOption {
 
-  public static JPopupMenu prepareContextMenu(JTable table, MontoyaApi api) {
+  public static JPopupMenu prepareContextMenu(JTable table,
+                                              DefaultTableModel tableModel,
+                                              JTextArea requestArea,
+                                              JTextArea responseArea,
+                                              JTextArea modifiedRequestArea,
+                                              MontoyaApi api) {
     // Inside your WtfTabPanel constructor or initializer
     JPopupMenu contextMenu = new JPopupMenu();
 
@@ -43,15 +49,26 @@ public class ContextMenuOption {
         e -> {
           int row = table.getSelectedRow();
           if (row >= 0) {
-            SwingUtilities.invokeLater(() -> WtfResultStore.getInstance().removeItem(row));
+
+            SwingUtilities.invokeLater(() -> {
+              WtfResultStore.getInstance().removeItem(row);
+              tableModel.removeRow(row);
+              requestArea.setText(null);
+              responseArea.setText(null);
+              modifiedRequestArea.setText(null);
+            });
           }
         });
 
     JMenuItem clearAll = new JMenuItem("Clear All");
     clearAll.addActionListener(
         e -> {
+          tableModel.setRowCount(0);
           InMemory.SEEN_REQUESTS.clear();
           SwingUtilities.invokeLater(() -> WtfResultStore.getInstance().clear());
+          requestArea.setText(null);
+          responseArea.setText(null);
+          modifiedRequestArea.setText(null);
         });
 
     contextMenu.add(sendToRepeater);

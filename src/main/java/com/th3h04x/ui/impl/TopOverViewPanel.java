@@ -7,6 +7,7 @@ import com.th3h04x.model.WtfResult;
 import com.th3h04x.store.WtfResultStore;
 import com.th3h04x.ui.WtfPanel;
 import com.th3h04x.util.WtfUtil;
+import lombok.Getter;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -22,7 +23,7 @@ public class TopOverViewPanel implements WtfPanel {
   private final JTextArea requestArea;
   private final JTextArea modifiedRequestArea;
   private final JTextArea responseArea;
-  private DefaultTableModel tableModel;
+  @Getter private DefaultTableModel tableModel;
   private JTable table;
 
   public TopOverViewPanel(
@@ -79,7 +80,9 @@ public class TopOverViewPanel implements WtfPanel {
   private void paintTheUi() {
 
     // set up the extension options
-    table.setComponentPopupMenu(ContextMenuOption.prepareContextMenu(table, api));
+    table.setComponentPopupMenu(
+        ContextMenuOption.prepareContextMenu(
+            table, tableModel, requestArea, responseArea, modifiedRequestArea, api));
     addClickListeners();
   }
 
@@ -106,10 +109,8 @@ public class TopOverViewPanel implements WtfPanel {
     WtfResultStore wtfResultStore = WtfResultStore.getInstance();
     InMemory.IN_SCOPE.clear();
 
-    List<String> filters = Arrays.stream(domains.split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .toList();
+    List<String> filters =
+        Arrays.stream(domains.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
 
     InMemory.IN_SCOPE.addAll(filters);
 
@@ -117,18 +118,19 @@ public class TopOverViewPanel implements WtfPanel {
     if (filters.isEmpty()) {
       sorter.setRowFilter(null); // show all
     } else {
-      sorter.setRowFilter(new RowFilter<TableModel, Integer>() {
+      sorter.setRowFilter(
+          new RowFilter<TableModel, Integer>() {
 
-        @Override
-        public boolean include(Entry entry) {
-          int modelRow = (int) entry.getIdentifier();
-          WtfResult wtfResult = wtfResultStore.getResult(modelRow);
-          if (wtfResult == null) return false;
+            @Override
+            public boolean include(Entry entry) {
+              int modelRow = (int) entry.getIdentifier();
+              WtfResult wtfResult = wtfResultStore.getResult(modelRow);
+              if (wtfResult == null) return false;
 
-          String host = wtfResult.getRequest().httpService().host();
-          return WtfUtil.isInScope(host); // keep only in-scope rows
-        }
-      });
+              String host = wtfResult.getRequest().httpService().host();
+              return WtfUtil.isInScope(host); // keep only in-scope rows
+            }
+          });
     }
   }
 }

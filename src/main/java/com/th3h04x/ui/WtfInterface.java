@@ -10,8 +10,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.swing.*;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.*;
 
 public class WtfInterface {
@@ -29,6 +27,17 @@ public class WtfInterface {
   }
 
   public WtfInterface paint() {
+
+    // Bottom panel: two text areas split vertically (request / response)
+    reqRespPanel = new ReqRespPanel();
+
+    // Top panel: table with issues summary
+    topOverViewPanel =
+        new TopOverViewPanel(
+            api,
+            reqRespPanel.getRequestArea(),
+            reqRespPanel.getModifiedRequestArea(),
+            reqRespPanel.getResponseArea());
 
     // === New Filter Panel at the top ===
     JPanel filterPanel = new JPanel(new BorderLayout());
@@ -53,25 +62,19 @@ public class WtfInterface {
 
     clearAllFilterButton.addActionListener(e -> {
       SwingUtilities.invokeLater(() -> {
+        topOverViewPanel.getTableModel().setRowCount(0);
         InMemory.SEEN_REQUESTS.clear();
         InMemory.CACHEABLE_PATH.clear();
         InMemory.STATIC_DIR.clear();
         InMemory.NON_CACHEABLE_PATH.clear();
         InMemory.QUERY_PARAMETERS.clear();
         WtfResultStore.getInstance().clear();
+
+        reqRespPanel.getRequestArea().setText(null);
+        reqRespPanel.getResponseArea().setText(null);
+        reqRespPanel.getModifiedRequestArea().setText(null);
       });
     });
-
-    // Bottom panel: two text areas split vertically (request / response)
-    reqRespPanel = new ReqRespPanel();
-
-    // Top panel: table with issues summary
-    topOverViewPanel =
-        new TopOverViewPanel(
-            api,
-            reqRespPanel.getRequestArea(),
-            reqRespPanel.getModifiedRequestArea(),
-            reqRespPanel.getResponseArea());
 
     // Main split: table on top, bottomSplit at the bottom
     JPanel topPanelWithFilter = new JPanel(new BorderLayout());
